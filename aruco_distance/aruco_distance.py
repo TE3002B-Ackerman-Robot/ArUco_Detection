@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseArray, Pose, PointStamped, PoseStamped
-import cv2
-import numpy as np
 import cv2.aruco as aruco
+import numpy as np
+import cv2
 
 class ArucoDistanceDetector(Node):
     def __init__(self):
@@ -45,7 +44,7 @@ class ArucoDistanceDetector(Node):
         self.markers_pub = self.create_publisher(PoseArray, 'aruco/marker_poses', 10)
         self.distances_pub = self.create_publisher(PointStamped, 'aruco/marker_distances', 10)
         self.image_pub = self.create_publisher(Image, 'aruco/detected_image', 10)
-        self.robot_pose_pub = self.create_publisher(PoseStamped, 'aruco/robot_pose', 10) #publicador que debe recibir odometria
+        self.robot_pose_pub = self.create_publisher(PoseStamped, 'aruco/robot_pose', 10)
 
         self.get_logger().info(f'Nodo de detección de ArUco inicializado. Esperando imágenes en {self.camera_topic}')
 
