@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
-from geometry_msgs.msg import PoseArray, Pose, PointStamped
+from geometry_msgs.msg import PoseArray, Pose, PointStamped, PoseStamped
 import cv2
 import numpy as np
 import cv2.aruco as aruco
@@ -11,135 +12,122 @@ import cv2.aruco as aruco
 class ArucoDistanceDetector(Node):
     def __init__(self):
         super().__init__('aruco_distance_detector')
-        
-        # --- Configuración de parámetros ---
+
         self.declare_parameters(
             namespace='',
             parameters=[
                 ('camera_topic', '/camera/color/image_raw'),
-                ('marker_size', 0.09),  # en metros
+                ('marker_size', 0.115),
                 ('dictionary_id', 'DICT_4X4_250'),
                 ('show_image', True),
-                ('camera_matrix', [1491.69912, 0.0, 1137.52964, 0.0, 1432.22457, 407.952679, 0.0, 0.0, 1.0]),
-                ('dist_coeffs', [0.06383568, 0.15331208, -0.01669957, 0.05292742, -0.28933054])
+                ('camera_matrix', [465.0, 0.0, 290.0, 0.0, 465.0, 170.0, 0.0, 0.0, 1.0]),
+                ('dist_coeffs', [0.29240194, -2.31175373, -0.01181112, -0.01688533, 6.86271224])
             ]
         )
-        
-        # Obtener parámetros
+
         self.camera_topic = self.get_parameter('camera_topic').value
         self.marker_size = self.get_parameter('marker_size').value
         dictionary_id = self.get_parameter('dictionary_id').value
         self.show_image = self.get_parameter('show_image').value
-        
-        # Configurar diccionario ArUco
+
         self.aruco_dict = aruco.getPredefinedDictionary(ARUCO_DICT[dictionary_id])
         self.aruco_params = aruco.DetectorParameters()
         self.detector = aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
-        
-        # Configurar matriz de cámara y coeficientes de distorsión
+
         camera_matrix = self.get_parameter('camera_matrix').value
         self.camera_matrix = np.array(camera_matrix, dtype=np.float32).reshape(3, 3)
         dist_coeffs = self.get_parameter('dist_coeffs').value
         self.dist_coeffs = np.array(dist_coeffs, dtype=np.float32)
-        
-        # Bridge para conversión de imágenes ROS-OpenCV
+
         self.bridge = CvBridge()
-        
-        # --- Publicadores y suscriptores ---
-        # Suscriptor a la imagen de la cámara
-        self.image_sub = self.create_subscription(Image, self.camera_topic, self.image_callback,10)
-        
-        # Publicador para poses de los marcadores
+
+        self.image_sub = self.create_subscription(Image, self.camera_topic, self.image_callback, 10)
         self.markers_pub = self.create_publisher(PoseArray, 'aruco/marker_poses', 10)
-        
-        # Publicador para distancias de los marcadores
         self.distances_pub = self.create_publisher(PointStamped, 'aruco/marker_distances', 10)
-        
-        # Publicador para imagen con anotaciones
         self.image_pub = self.create_publisher(Image, 'aruco/detected_image', 10)
-        
+        self.robot_pose_pub = self.create_publisher(PoseStamped, 'aruco/robot_pose', 10) #publicador que debe recibir odometria
+
         self.get_logger().info(f'Nodo de detección de ArUco inicializado. Esperando imágenes en {self.camera_topic}')
 
     def image_callback(self, msg):
         try:
-            # Convertir imagen ROS a OpenCV
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             frame_with_markers = frame.copy()
-            
-            # Detectar marcadores
             corners, ids, _ = self.detector.detectMarkers(frame)
-            
+
             if ids is not None:
                 pose_array = PoseArray()
                 pose_array.header = msg.header
-                
+
                 for i in range(len(ids)):
-                    # Estimar pose del marcador
-                    rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
-                        corners[i], self.marker_size, self.camera_matrix, self.dist_coeffs
-                    )
-                    
-                    # Calcular distancia euclidiana
-                    distance = np.linalg.norm(tvec)
-                    
-                    # Publicar distancia
+                    rvec, tvec, _ = aruco.estimatePoseSingleMarkers(corners[i], self.marker_size, self.camera_matrix, self.dist_coeffs)
+                    aruco_id = ids[i][0]
+
+                    distance = float(np.linalg.norm(tvec[0][0]))
+
                     distance_msg = PointStamped()
                     distance_msg.header = msg.header
-                    distance_msg.header.frame_id = f"aruco_{ids[i][0]}"
+                    distance_msg.header.frame_id = f"aruco_{aruco_id}"
                     distance_msg.point.x = distance
                     self.distances_pub.publish(distance_msg)
-                    
-                    # Crear mensaje de pose
+
                     pose = Pose()
-                    pose.position.x = tvec[0][0][0]
-                    pose.position.y = tvec[0][0][1]
-                    pose.position.z = tvec[0][0][2]
-                    
-                    # Convertir vector de rotación a cuaternión
+                    pose.position.x = float(tvec[0][0][0])
+                    pose.position.y = float(tvec[0][0][1])
+                    pose.position.z = float(tvec[0][0][2])
+
                     rotation_matrix = np.eye(4)
                     rotation_matrix[0:3, 0:3] = cv2.Rodrigues(rvec)[0]
                     quaternion = self.rotation_matrix_to_quaternion(rotation_matrix)
-                    
-                    pose.orientation.x = quaternion[0]
-                    pose.orientation.y = quaternion[1]
-                    pose.orientation.z = quaternion[2]
-                    pose.orientation.w = quaternion[3]
-                    
+
+                    pose.orientation.x = float(quaternion[0])
+                    pose.orientation.y = float(quaternion[1])
+                    pose.orientation.z = float(quaternion[2])
+                    pose.orientation.w = float(quaternion[3])
+
                     pose_array.poses.append(pose)
-                    
-                    # Dibujar marcador y distancia
+
+                    # Estimación de pose del robot
+                    if aruco_id in ARUCO_DIST:
+                        Xm, Ym = ARUCO_DIST[aruco_id]
+                        x_robot, y_robot, yaw_robot = estimate_robot_pose_from_marker(Xm, Ym, rvec[0], tvec[0])
+
+                        pose_stamped = PoseStamped()
+                        pose_stamped.header = msg.header
+                        pose_stamped.pose.position.x = x_robot
+                        pose_stamped.pose.position.y = y_robot
+                        pose_stamped.pose.position.z = 0.0
+
+                        qz = np.sin(yaw_robot / 2.0)
+                        qw = np.cos(yaw_robot / 2.0)
+                        pose_stamped.pose.orientation.z = qz
+                        pose_stamped.pose.orientation.w = qw
+
+                        self.robot_pose_pub.publish(pose_stamped)
+
+                        self.get_logger().info(
+                            f'[Robot estimado] ID {aruco_id}: X={x_robot:.2f} Y={y_robot:.2f} θ={np.degrees(yaw_robot):.2f} deg')
+
                     cv2.aruco.drawDetectedMarkers(frame_with_markers, corners, ids)
-                    cv2.drawFrameAxes(frame_with_markers, self.camera_matrix, self.dist_coeffs, 
-                                     rvec, tvec, self.marker_size * 0.5)
-                    
+                    cv2.drawFrameAxes(frame_with_markers, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_size * 0.5)
+
                     text_pos = tuple(map(int, corners[i][0][0]))
-                    cv2.putText(
-                        frame_with_markers, 
-                        f"ID {ids[i][0]}: {distance:.2f}m", 
-                        text_pos, 
-                        cv2.FONT_HERSHEY_SIMPLEX, 
-                        0.7, 
-                        (0, 255, 0), 
-                        2
-                    )
-                
-                # Publicar poses
+                    cv2.putText(frame_with_markers, f"ID {aruco_id}: {distance:.2f}m", text_pos,
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
                 self.markers_pub.publish(pose_array)
-            
-            # Publicar imagen procesada
+
             self.image_pub.publish(self.bridge.cv2_to_imgmsg(frame_with_markers, encoding='bgr8'))
-            
-            # Mostrar imagen (opcional)
+
             if self.show_image:
                 cv2.imshow("ArUco Detection", frame_with_markers)
                 cv2.waitKey(1)
-                
+
         except Exception as e:
-            self.get_logger().error(f'Error en el procesamiento de imagen: {str(e)}')
+            self.get_logger().error(f'Error en el procesamiento de imagen: {e}')
 
     def rotation_matrix_to_quaternion(self, R):
-        """Convertir matriz de rotación a cuaternión"""
-        q = np.empty((4, ), dtype=np.float32)
+        q = np.empty((4,), dtype=np.float32)
         q[3] = np.sqrt(np.maximum(0, 1 + R[0, 0] + R[1, 1] + R[2, 2])) / 2
         q[0] = np.sqrt(np.maximum(0, 1 + R[0, 0] - R[1, 1] - R[2, 2])) / 2
         q[1] = np.sqrt(np.maximum(0, 1 - R[0, 0] + R[1, 1] - R[2, 2])) / 2
@@ -149,7 +137,17 @@ class ArucoDistanceDetector(Node):
         q[2] *= np.sign(q[2] * (R[1, 0] - R[0, 1]))
         return q
 
-# Diccionario de tipos de marcadores ArUco
+
+# Diccionario de posiciones conocidas de ArUcos (sin orientación)
+ARUCO_DIST = {
+    1: (0, 2.24),
+    2: (1.0, 2.24),
+    3: (2.0, 2.24),
+    4: (3.0, 2.24),
+    5: (4.0, 2.24),
+    6: (5.0, 2.24)
+}
+
 ARUCO_DICT = {
     "DICT_4X4_50": cv2.aruco.DICT_4X4_50,
     "DICT_4X4_100": cv2.aruco.DICT_4X4_100,
@@ -174,10 +172,19 @@ ARUCO_DICT = {
     "DICT_APRILTAG_36h11": cv2.aruco.DICT_APRILTAG_36h11
 }
 
+def estimate_robot_pose_from_marker(Xm, Ym, rvec, tvec):
+    R_cam_marker, _ = cv2.Rodrigues(rvec)
+    t_cam_marker = tvec.reshape(3, 1)
+    R_marker_cam = R_cam_marker.T
+    t_marker_cam = -R_marker_cam @ t_cam_marker
+    x_robot = Xm + t_marker_cam[0, 0]
+    y_robot = Ym + t_marker_cam[2, 0]
+    yaw = np.arctan2(R_marker_cam[1, 0], R_marker_cam[0, 0])
+    return x_robot, y_robot, yaw
+
 def main(args=None):
     rclpy.init(args=args)
     node = ArucoDistanceDetector()
-    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
