@@ -43,32 +43,17 @@ ARUCO_DICT = {
     "DICT_APRILTAG_36h11": cv2.aruco.DICT_APRILTAG_36h11
 }
 
-def estimate_robot_pose_from_marker(Xm, Ym, theta_m, rvec, tvec):
-    # 1. convierte rvec→matriz y extrae tvec
+def marker_rel_robot(rvec, tvec):
+    # extrae tx, ty, tz
+    tx, ty, tz = tvec.flatten()
+    # reetiqueta
+    x_marker = tz      # marcador “adelante” del robot
+    y_marker = tx      # marcador “a la derecha” del robot
+    # (opcional) calcula yaw del marcador respecto a la cámara
     R_cam_marker, _ = cv2.Rodrigues(rvec)
-    t_cam_marker   = tvec.reshape(3,)
-
-    # 2. invierte la tf (cámara en frame marcador)
-    R_marker_cam = R_cam_marker.T
-    t_marker_cam = - R_marker_cam @ t_cam_marker
-
-    # 3. gira ese vector desde frame “marcador” a frame “mapa”
-    dx =  math.cos(theta_m)*t_marker_cam[0] \
-        - math.sin(theta_m)*t_marker_cam[1]
-    dy =  math.sin(theta_m)*t_marker_cam[0] \
-        + math.cos(theta_m)*t_marker_cam[1]
-
-    # 4. traslada con la posición fija del marcador
-    x_robot = Xm + dx
-    y_robot = Ym + dy
-
-    # 5. calcula el yaw global
-    yaw_rel   = math.atan2(R_marker_cam[1,0], R_marker_cam[0,0])
-    yaw_robot = theta_m + yaw_rel
-
-    return x_robot, y_robot, yaw_robot
-
-
+    # por ejemplo, yaw = rotación alrededor de Z de la cámara:
+    yaw_marker = math.atan2(R_cam_marker[1,2], R_cam_marker[2,2])
+    return x_marker, y_marker, yaw_marker
 
 class ArucoDistanceDetector(Node):
     def __init__(self):
