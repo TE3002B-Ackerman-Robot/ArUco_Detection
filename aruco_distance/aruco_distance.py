@@ -4,7 +4,6 @@ from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseArray, Pose, PointStamped, PoseWithCovarianceStamped
-import cv2.aruco as aruco
 import numpy as np
 import math
 import cv2
@@ -21,27 +20,27 @@ ARUCO_DIST = {
 
 # Mapeo de identificadores de diccionarios ArUco
 ARUCO_DICT = {
-    "DICT_4X4_50":    aruco.DICT_4X4_50,
-    "DICT_4X4_100":   aruco.DICT_4X4_100,
-    "DICT_4X4_250":   aruco.DICT_4X4_250,
-    "DICT_4X4_1000":  aruco.DICT_4X4_1000,
-    "DICT_5X5_50":    aruco.DICT_5X5_50,
-    "DICT_5X5_100":   aruco.DICT_5X5_100,
-    "DICT_5X5_250":   aruco.DICT_5X5_250,
-    "DICT_5X5_1000":  aruco.DICT_5X5_1000,
-    "DICT_6X6_50":    aruco.DICT_6X6_50,
-    "DICT_6X6_100":   aruco.DICT_6X6_100,
-    "DICT_6X6_250":   aruco.DICT_6X6_250,
-    "DICT_6X6_1000":  aruco.DICT_6X6_1000,
-    "DICT_7X7_50":    aruco.DICT_7X7_50,
-    "DICT_7X7_100":   aruco.DICT_7X7_100,
-    "DICT_7X7_250":   aruco.DICT_7X7_250,
-    "DICT_7X7_1000":  aruco.DICT_7X7_1000,
-    "DICT_ARUCO_ORIGINAL": aruco.DICT_ARUCO_ORIGINAL,
-    "DICT_APRILTAG_16h5":  aruco.DICT_APRILTAG_16h5,
-    "DICT_APRILTAG_25h9":  aruco.DICT_APRILTAG_25h9,
-    "DICT_APRILTAG_36h10": aruco.DICT_APRILTAG_36h10,
-    "DICT_APRILTAG_36h11": aruco.DICT_APRILTAG_36h11
+    "DICT_4X4_50":    cv2.aruco.DICT_4X4_50,
+    "DICT_4X4_100":   cv2.aruco.DICT_4X4_100,
+    "DICT_4X4_250":   cv2.aruco.DICT_4X4_250,
+    "DICT_4X4_1000":  cv2.aruco.DICT_4X4_1000,
+    "DICT_5X5_50":    cv2.aruco.DICT_5X5_50,
+    "DICT_5X5_100":   cv2.aruco.DICT_5X5_100,
+    "DICT_5X5_250":   cv2.aruco.DICT_5X5_250,
+    "DICT_5X5_1000":  cv2.aruco.DICT_5X5_1000,
+    "DICT_6X6_50":    cv2.aruco.DICT_6X6_50,
+    "DICT_6X6_100":   cv2.aruco.DICT_6X6_100,
+    "DICT_6X6_250":   cv2.aruco.DICT_6X6_250,
+    "DICT_6X6_1000":  cv2.aruco.DICT_6X6_1000,
+    "DICT_7X7_50":    cv2.aruco.DICT_7X7_50,
+    "DICT_7X7_100":   cv2.aruco.DICT_7X7_100,
+    "DICT_7X7_250":   cv2.aruco.DICT_7X7_250,
+    "DICT_7X7_1000":  cv2.aruco.DICT_7X7_1000,
+    "DICT_ARUCO_ORIGINAL": cv2.aruco.DICT_ARUCO_ORIGINAL,
+    "DICT_APRILTAG_16h5":  cv2.aruco.DICT_APRILTAG_16h5,
+    "DICT_APRILTAG_25h9":  cv2.aruco.DICT_APRILTAG_25h9,
+    "DICT_APRILTAG_36h10": cv2.aruco.DICT_APRILTAG_36h10,
+    "DICT_APRILTAG_36h11": cv2.aruco.DICT_APRILTAG_36h11
 }
 
 def estimate_robot_pose_from_marker(Xm, Ym, rvec, tvec):
@@ -81,8 +80,8 @@ class ArucoDistanceDetector(Node):
         # Lectura de parámetros
         self.marker_size   = self.get_parameter('marker_size').value
         dict_id            = self.get_parameter('dictionary_id').value
-        self.aruco_dict    = aruco.getPredefinedDictionary(ARUCO_DICT[dict_id])
-        self.detector      = aruco.ArucoDetector(self.aruco_dict, aruco.DetectorParameters())
+        self.aruco_dict    = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[dict_id])
+        self.detector      = cv2.aruco.ArucoDetector(self.aruco_dict, cv2.aruco.DetectorParameters())
         cam_mat            = self.get_parameter('camera_matrix').value
         self.camera_matrix = np.array(cam_mat, dtype=np.float32).reshape(3,3)
         dist_c             = self.get_parameter('dist_coeffs').value
@@ -95,7 +94,7 @@ class ArucoDistanceDetector(Node):
         self.markers_pub   = self.create_publisher(PoseArray,                 'aruco/marker_poses',     10)
         self.distances_pub = self.create_publisher(PointStamped,              'aruco/marker_distances', 10)
         self.image_pub     = self.create_publisher(Image,                     'aruco/detected_image',   10)
-        self.pose_cov_pub  = self.create_publisher(PoseWithCovarianceStamped, 'aruco/robot_pose',       10)
+        self.pose_cov_pub  = self.create_publisher(PoseWithCovarianceStamped, 'aruco/pose_cov',         10)
 
         # Suscripciones
         self.image_sub = self.create_subscription(Image, '/camera/color/image_raw', self.image_callback, 10)
@@ -108,36 +107,60 @@ class ArucoDistanceDetector(Node):
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
         # 2) Detectar marcadores y estimar rvec/tvec
-        corners, ids, rvecs, tvecs = self.detect_markers(frame)
+        corners, ids = self.detector.detectMarkers(frame)[:2]
 
         # 3) Publicar info y dibujar
-        if ids is not None:
-            self.publish_marker_info(corners, ids, rvecs, tvecs, msg.header)
-            frame_out = self.draw_detections(frame, corners, ids, rvecs, tvecs)
+        if ids is not None and len(ids):
+            rvecs, tvecs = self.estimate_poses(frame, corners)
+            self.publish_info(corners, ids, rvecs, tvecs, msg.header)
+            out = self.draw(frame, corners, ids, rvecs, tvecs)
         else:
-            frame_out = frame
+            out = frame
 
         # 4) Publicar imagen resultante
-        self.image_pub.publish(self.bridge.cv2_to_imgmsg(frame_out, encoding='bgr8'))
+        self.image_pub.publish(self.bridge.cv2_to_imgmsg(out, encoding='bgr8'))
 
 
-    def detect_markers(self, frame):
-        corners, ids, _ = self.detector.detectMarkers(frame)
+    def estimate_poses(self, frame, corners):
+        # Intentar usar cv2.aruco si disponible
+        try:
+            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                corners, self.marker_size, self.camera_matrix, self.dist_coeffs
+            )
+            return rvecs, tvecs
 
-        if ids is None or len(ids) == 0:
-            return None, None, None, None
+        except AttributeError:
+            # Fallback manual con solvePnP
+            obj_pts = np.array([
+                [-self.marker_size/2,  self.marker_size/2, 0],
+                [ self.marker_size/2,  self.marker_size/2, 0],
+                [ self.marker_size/2, -self.marker_size/2, 0],
+                [-self.marker_size/2, -self.marker_size/2, 0]
+            ], dtype=np.float32)
+            rvecs = []
+            tvecs = []
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
-            corners,
-            self.marker_size,
-            self.camera_matrix,
-            self.dist_coeffs
-        )
+            for c in corners:
+                img_pts = c.reshape(4,2).astype(np.float32)
+                ok, r, t = cv2.solvePnP(obj_pts, img_pts,
+                                        self.camera_matrix, self.dist_coeffs)
+                if ok:
+                    rvecs.append(r)
+                    tvecs.append(t)
 
-        return corners, ids, rvecs, tvecs
+            # Dar formato igual al estimatePoseSingleMarkers
+            if rvecs:
+                rvecs = np.array(rvecs).reshape(-1,1,3)
+                tvecs = np.array(tvecs).reshape(-1,1,3)
+            else:
+                rvecs = np.empty((0,1,3))
+                tvecs = np.empty((0,1,3))
+
+            return rvecs, tvecs
 
 
-    def publish_marker_info(self, corners, ids, rvecs, tvecs, header):
+    def publish_info(self, corners, ids, rvecs, tvecs, header):
         pose_array = PoseArray()
         pose_array.header = header
 
@@ -158,33 +181,33 @@ class ArucoDistanceDetector(Node):
             p = Pose()
             p.position.x, \
             p.position.y, \
-            p.position.z = float(tvec)
+            p.position.z = tvec
 
             # Quaternion del marcador
             rot_mat = cv2.Rodrigues(rvec)[0]
             quat4x4 = np.eye(4)
             quat4x4[:3,:3] = rot_mat
-            p.orientation.x, \
-            p.orientation.y, \
-            p.orientation.z, \
-            p.orientation.w = self.rotation_matrix_to_quaternion(quat4x4)
+            q = self.rotation_matrix_to_quaternion(quat4x4)
+            p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w = q
             pose_array.poses.append(p)
 
             # --- Pose del robot corregida ---
             if aruco_id in ARUCO_DIST:
                 Xm, Ym = ARUCO_DIST[aruco_id]
                 xr, yr, yaw = estimate_robot_pose_from_marker(Xm, Ym, rvec, tvec)
-                pwm = PoseWithCovarianceStamped()
-                pwm.header = header
-                pwm.pose.pose.position.x = xr
-                pwm.pose.pose.position.y = yr
-                pwm.pose.pose.position.z = 0.0
+
+                pwc = PoseWithCovarianceStamped()
+                pwc.header.stamp = header.stamp
+                pwc.header.frame_id = 'map'
+                pwc.pose.pose.position.x = xr
+                pwc.pose.pose.position.y = yr
+                pwc.pose.pose.position.z = 0.0
 
                 # Orientación yaw
-                qz = math.sin(yaw/2.0)
-                qw = math.cos(yaw/2.0)
-                pwm.pose.pose.orientation.z = qz
-                pwm.pose.pose.orientation.w = qw
+                qz = math.sin(yaw / 2.0)
+                qw = math.cos(yaw / 2.0)
+                pwc.pose.pose.orientation.z = qz
+                pwc.pose.pose.orientation.w = qw
 
                 # Covarianza diagonal (0.02 m, 5°)
                 var_xy  = 0.02**2
@@ -193,40 +216,24 @@ class ArucoDistanceDetector(Node):
                 cov[0]  = var_xy
                 cov[7]  = var_xy
                 cov[35] = var_yaw
-                pwm.pose.covariance = cov
-                self.pose_cov_pub.publish(pwm)
+                pwc.pose.covariance = cov
+
+                self.pose_cov_pub.publish(pwc)
 
         self.markers_pub.publish(pose_array)
 
 
-    def draw_detections(self, frame, corners, ids, rvecs, tvecs):
-        out_frame = frame.copy()
-        cv2.aruco.drawDetectedMarkers(out_frame, corners, ids)
+    def draw(self, frame, corners, ids, rvecs, tvecs):
+        out = frame.copy()
+        cv2.aruco.drawDetectedMarkers(out, corners, ids)
+        for i, id_ in enumerate(ids.flatten()):
+            rv = rvecs[i][0]; tv = tvecs[i][0]
+            cv2.drawFrameAxes(out, self.camera_matrix, self.dist_coeffs, rv, tv, self.marker_size*0.5)
+            pt = tuple(map(int, corners[i][0][0]))
+            d = float(np.linalg.norm(tv))
+            cv2.putText(out, f'ID {id_}: {d:.2f}m', pt, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
+        return out
 
-        for idx, aruco_id in enumerate(ids.flatten()):
-            cv2.drawFrameAxes(
-                out_frame,
-                self.camera_matrix,
-                self.dist_coeffs,
-                rvecs[idx][0],
-                tvecs[idx][0],
-                self.marker_size * 0.5
-            )
-
-            # Etiqueta de distancia
-            pt = tuple(map(int, corners[idx][0][0]))
-            d  = float(np.linalg.norm(tvecs[idx][0]))
-            cv2.putText(
-                out_frame,
-                f'ID {aruco_id}: {d:.2f}m',
-                pt,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0,255,0),
-                2
-            )
-
-        return out_frame
 
     def rotation_matrix_to_quaternion(self, M):
         # Asume M es 4x4
@@ -251,6 +258,7 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
