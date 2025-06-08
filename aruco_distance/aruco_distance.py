@@ -10,12 +10,12 @@ import cv2
 
 # Diccionario de posiciones conocidas de ArUcos (sin orientación)
 ARUCO_DIST = {
-    1: (0.3, 0.3),
-    2: (2.10, 0.3),
-    3: (2.10, 2.10),
-    4: (0.3, 2.10),
-    5: (4.0, 2.24),
-    6: (5.0, 2.24)
+    1: (0.3, 0.3, 0.0),
+    2: (2.10, 0.3, 0.0),
+    3: (2.10, 2.10, 0.0),
+    4: (0.3, 2.10, 0.0),
+    5: (4.0, 2.24, 0.0),
+    6: (5.0, 2.24, 0.0)
 }
 
 # Mapeo de identificadores de diccionarios ArUco
@@ -193,8 +193,10 @@ class ArucoDistanceDetector(Node):
 
             # --- Pose del robot corregida ---
             if aruco_id in ARUCO_DIST:
-                Xm, Ym = ARUCO_DIST[aruco_id]
-                xr, yr, yaw = estimate_robot_pose_from_marker(Xm, Ym, rvec, tvec)
+                Xm, Ym, THETAm = ARUCO_DIST[aruco_id]
+                xr, yr, yawr = estimate_robot_pose_from_marker(Xm, Ym, rvec, tvec)
+
+                yaw=THETAm+yawr
 
                 pwc = PoseWithCovarianceStamped()
                 pwc.header.stamp = header.stamp
