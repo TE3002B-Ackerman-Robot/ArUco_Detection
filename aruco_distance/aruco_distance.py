@@ -53,7 +53,7 @@ def estimate_robot_pose_from_marker(Xm, Ym, rvec, tvec):
     R_marker_cam = R_cam_marker.T
     t_marker_cam = -R_marker_cam @ t_cam_marker
     x_robot = Xm + t_marker_cam[0, 0]
-    y_robot = Ym + t_marker_cam[2, 0]
+    y_robot = Ym + t_marker_cam[1, 0]
     yaw     = math.atan2(R_marker_cam[1, 0], R_marker_cam[0, 0])
     return x_robot, y_robot, yaw
 
