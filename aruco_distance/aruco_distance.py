@@ -10,12 +10,16 @@ import cv2
 
 # Diccionario de posiciones conocidas de ArUcos (sin orientación)
 ARUCO_DIST = {
-    1: (0.3, 0.3, 0.0),
-    2: (2.40, 0.3, 0.0),
-    3: (2.40, 2.40, 0.0),
-    4: (0.3, 2.40, 0.0),
-    5: (4.0, 2.24, 0.0),
-    6: (5.0, 2.24, 0.0)
+    0: (0.00, 0.00, 0.0),
+    1: (0.30, 0.30, math.radians(90.0)),
+    2: (2.40, 0.30, math.radians(180.0)),
+    3: (0.30, 2.10, math.radians(180.0)),
+    4: (2.40, 2.40, math.radians(-90.0)),
+    5: (5.0, 2.24, math.radians(-90.0)),
+    6: (4.0, 2.24, 0.0),
+    7: (5.0, 2.24, 0.0),
+    8: (5.0, 2.24, 0.0),
+    8: (5.0, 2.24, math.radians(90.0))
 }
 
 # Mapeo de identificadores de diccionarios ArUco
@@ -48,23 +52,20 @@ def estimate_robot_pose_from_marker(Xm, Ym, theta_m, rvec, tvec):
     R_cam_marker, _ = cv2.Rodrigues(rvec)
     t_cam_marker   = tvec.reshape(3,)
 
-    t_cam_marker = np.array([t_cam_marker[2], -t_cam_marker[0], -t_cam_marker[1]])
-
-
     # 2. invierte la tf (cámara en frame marcador)
-    t_marker_robot = - R_cam_marker.T @ t_cam_marker
+    t_marker_robot = -R_cam_marker.T @ t_cam_marker
 
     # 3. gira ese vector desde frame “marcador” a frame “mapa”
     dx = math.cos(theta_m) * t_marker_robot[0] - math.sin(theta_m) * t_marker_robot[1]
     dy = math.sin(theta_m) * t_marker_robot[0] + math.cos(theta_m) * t_marker_robot[1]
 
     # 4. traslada con la posición fija del marcador
-    x_robot = Xm + dx
-    y_robot = Ym + dy
+    x_robot = Xm - dx
+    y_robot = Ym - dy
 
     # 5. calcula el yaw global
     yaw_rel = math.atan2(R_cam_marker[1, 0], R_cam_marker[0, 0])
-    yaw_robot = theta_m - yaw_rel  # Nota el signo negativo aquí
+    yaw_robot = (theta_m + yaw_rel + math.pi) % (2 * math.pi)  # Nota el signo negativo aquí
 
     return x_robot, y_robot, yaw_robot
 
