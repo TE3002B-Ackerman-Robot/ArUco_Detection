@@ -48,6 +48,9 @@ def estimate_robot_pose_from_marker(Xm, Ym, theta_m, rvec, tvec):
     R_cam_marker, _ = cv2.Rodrigues(rvec)
     t_cam_marker   = tvec.reshape(3,)
 
+    t_cam_marker = np.array([t_cam_marker[2], -t_cam_marker[0], -t_cam_marker[1]])
+
+
     # 2. invierte la tf (cámara en frame marcador)
     t_marker_robot = - R_cam_marker.T @ t_cam_marker
 
