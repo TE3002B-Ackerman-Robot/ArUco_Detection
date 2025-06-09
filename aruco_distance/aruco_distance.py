@@ -11,9 +11,9 @@ import cv2
 # Diccionario de posiciones conocidas de ArUcos (sin orientación)
 ARUCO_DIST = {
     1: (0.3, 0.3, 0.0),
-    2: (2.10, 0.3, 0.0),
-    3: (2.10, 2.10, 0.0),
-    4: (0.3, 2.10, 0.0),
+    2: (2.40, 0.3, 0.0),
+    3: (2.40, 2.40, 0.0),
+    4: (0.3, 2.40, 0.0),
     5: (4.0, 2.24, 0.0),
     6: (5.0, 2.24, 0.0)
 }
@@ -56,8 +56,8 @@ def estimate_robot_pose_from_marker(Xm, Ym, theta_m, rvec, tvec):
     dy = math.sin(theta_m) * t_marker_robot[0] + math.cos(theta_m) * t_marker_robot[1]
 
     # 4. traslada con la posición fija del marcador
-    x_robot = Xm - dx
-    y_robot = Ym - dy
+    x_robot = Xm + dx
+    y_robot = Ym + dy
 
     # 5. calcula el yaw global
     yaw_rel = math.atan2(R_cam_marker[1, 0], R_cam_marker[0, 0])
