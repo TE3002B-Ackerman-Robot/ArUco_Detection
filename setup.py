@@ -10,7 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/aruco_detection.launch.py']),
+        ('share/' + package_name + '/launch', ['launch/aruco_detection.launch.py', 'launch/signal_detection.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -21,7 +21,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'distance = aruco_distance.aruco_distance:main'
+            'distance = aruco_distance.aruco_distance:main',
+	        'client = aruco_distance.client:main'
         ],
     },
 )
